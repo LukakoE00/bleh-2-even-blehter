@@ -278,7 +278,7 @@
             <PreferredContainer secondary="outpostmedcab" minamount="1" maxamount="3" spawnprobability="0.5" />
             <PreferredContainer secondary="outpostmedcompartment" amount="1" spawnprobability="0.2" />
             <PreferredContainer secondary="researchcontainer" spawnprobability="0.02"/>
-            <PreferredContainer primary="medcab" minamount="24" maxamount="32" spawnprobability="1"/>
+            <PreferredContainer primary="medcab" minamount="12" maxamount="16" spawnprobability="1"/>
 
             <Price baseprice="30" minavailable="25">
                 <Price storeidentifier="merchantoutpost"/>
@@ -565,7 +565,7 @@
         <Item name="" identifier="opium" category="Medical" maxstacksize="32" maxstacksizecharacterinventory="8" Tags="smallitem,chem,medical" description="" cargocontaineridentifier="mediccrate" scale="0.5" useinhealthinterface="true" RequireAimToUse="True">
             <Upgrade gameversion="0.10.0.0" scale="0.5"/>
             <PreferredContainer primary="medfabcab" secondary="medcontainer"/>
-            <PreferredContainer secondary="abandonedmedcab,wreckmedcab" minamount="1" maxamount="2" spawnprobability="0.5" />
+            <PreferredContainer secondary="abandonedmedcab,wreckmedcab" minamount="1" maxamount="2" spawnprobability="0.2" />
             <PreferredContainer secondary="outposttrashcan" amount="1" spawnprobability="0.2" />
 
             <Price baseprice="40">
@@ -628,13 +628,12 @@
         <Item name="" identifier="antidama1" aliases="Corrigodone" category="Medical" maxstacksize="32" maxstacksizecharacterinventory="8" cargocontaineridentifier="mediccrate" Tags="smallitem,chem,medical,syringe" description="" useinhealthinterface="true" scale="0.5" impactsoundtag="impact_metal_light" RequireAimToUse="True">
             <Upgrade gameversion="0.10.0.0" scale="0.5" />
             <!--<PreferredContainer secondary="supplycab" minamount="1" maxamount="2" spawnprobability="0.5" notcampaign="true"/>-->
-            <PreferredContainer secondary="wrecksupplycab,beaconsupplycab" amount="1" spawnprobability="0.2" />
-            <PreferredContainer secondary="wreckmedcab,abandonedmedcab" minamount="0" maxamount="2" spawnprobability="0.3" />
+            <PreferredContainer secondary="wreckmedcab,abandonedmedcab" minamount="0" maxamount="2" spawnprobability="0.1" />
             <PreferredContainer secondary="outpostmedcab" minamount="1" maxamount="3" spawnprobability="0.5" />
             <PreferredContainer secondary="outpostmedcompartment" amount="1" spawnprobability="0.2" />
             <PreferredContainer secondary="outposttrashcan" amount="1" spawnprobability="0.1" />
             <PreferredContainer secondary="researchcontainer" spawnprobability="0.02"/>
-            <PreferredContainer primary="medcab" secondary="medcontainer" minamount="12" maxamount="16"/>
+            <PreferredContainer primary="medcab" secondary="medcontainer" minamount="6" maxamount="8"/>
 
             <Price baseprice="100" minavailable="12">
                 <Price storeidentifier="merchantoutpost"/>
@@ -716,7 +715,7 @@
         <Item name="" identifier="antidama2" category="Medical" maxstacksize="32" maxstacksizecharacterinventory="8" cargocontaineridentifier="mediccrate" Tags="smallitem,chem,medical,syringe" description="" useinhealthinterface="true" scale="0.5" impactsoundtag="impact_metal_light" RequireAimToUse="True">
             <Upgrade gameversion="0.10.0.0" scale="0.5" />
             <PreferredContainer primary="medcab"  minamount="0" maxamount="0" />
-            <PreferredContainer secondary="wreckmedcab,abandonedmedcab" minamount="0" maxamount="1" spawnprobability="0.4" />
+            <PreferredContainer secondary="wreckmedcab,abandonedmedcab" minamount="0" maxamount="1" spawnprobability="0.05" />
             <PreferredContainer secondary="outpostmedcab" minamount="1" maxamount="3" spawnprobability="0.3" />
             <PreferredContainer secondary="outpostmedcompartment" amount="1" spawnprobability="0.1" />
             <PreferredContainer secondary="outposttrashcan" amount="1" spawnprobability="0.05" />
@@ -837,6 +836,7 @@
                     <ReduceAffliction identifier="opiatewithdrawal" amount="2.0" />
                     <ReduceAffliction identifier="opiateoverdose" amount="2.0" />
                     <ReduceAffliction identifier="opiateaddiction" amount="2.0" />
+                    <ReduceAffliction identifier="analgesia" amount="2.0" />
                     <ReduceAffliction identifier="afopioid" amount="2.0" />
                 </StatusEffect>
                 <StatusEffect statuseffecttags="medical" multiplyafflictionsbymaxvitality="true" type="OnFailure" target="UseTarget" duration="30.0">
@@ -844,7 +844,7 @@
                     <ReduceAffliction identifier="opiateoverdose" amount="1.0" />
                     <ReduceAffliction identifier="opiateaddiction" amount="1.0" />
                     <ReduceAffliction identifier="analgesia" amount="1.0" />
-                    <Affliction identifier="afopioid" amount="1.0"/>
+                    <ReduceAffliction identifier="afopioid" amount="1.0" />
                     <Affliction identifier="coma" amount="0.5" probability="0.5" />
                 </StatusEffect>
                 <StatusEffect type="OnSuccess" target="UseTarget">

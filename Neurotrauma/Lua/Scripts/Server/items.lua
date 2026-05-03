@@ -380,6 +380,7 @@ end
 NT.CuttableAfflictions = {
 	"bandaged",
 	"dirtybandage",
+	"arteriesclamp",
 }
 
 NT.TraumashearsAfflictions = {
@@ -535,9 +536,25 @@ NT.SutureAfflictions = {
 	la_arterialcut = { xpgain = 3, case = "retractedskin" },
 	ra_arterialcut = { xpgain = 3, case = "retractedskin" },
 	h_arterialcut = { xpgain = 3, case = "retractedskin" },
-	t_arterialcut = { xpgain = 6, case = "retractedskin" },
+
+	t_arterialcut = {
+		xpgain = 6,
+		case = "retractedskin",
+		-- If Hardmode is turned on, disable open/close fixing it
+		condition = function()
+			return not NTConfig.Get("NT_HardmodeAorticRupture", false)
+		end,
+	},
+	tamponade = {
+		xpgain = 3,
+		case = "retractedskin",
+		-- If Open Close Tamponade is turned on, enable open/close fixing it
+		condition = function()
+			return NTConfig.Get("NT_OpenCloseTamponade", false)
+		end,
+	},
+
 	arteriesclamp = { xpgain = 0, case = "retractedskin" },
-	tamponade = { xpgain = 3, case = "retractedskin" },
 	internalbleeding = { xpgain = 3, case = "retractedskin" },
 	stroke = { xpgain = 6, case = "retractedskin" },
 
@@ -603,7 +620,12 @@ NT.ItemMethods.suture = function(item, usingCharacter, targetCharacter, limb)
 		for key, value in pairs(NT.SutureAfflictions) do
 			local prefab = AfflictionPrefab.Prefabs[key]
 
-			if prefab ~= nil and (value.case == nil or HF.HasAfflictionLimb(targetCharacter, value.case, limbtype)) then
+			if
+				prefab ~= nil
+				and (value.case == nil or HF.HasAfflictionLimb(targetCharacter, value.case, limbtype))
+				-- Additional check for config
+				and (value.condition == nil or value.condition(item, usingCharacter, targetCharacter, limb))
+			then
 				if value.func ~= nil then
 					value.func(item, usingCharacter, targetCharacter, limb)
 				else
@@ -630,17 +652,14 @@ NT.ItemMethods.tourniquet = function(item, usingCharacter, targetCharacter, limb
 		HF.GetSkillRequirementMet(usingCharacter, "medical", 30)
 		and not HF.HasAfflictionLimb(targetCharacter, "arteriesclamp", limbtype, 1)
 	then
-		if NT.LimbIsArterialCut(targetCharacter, limbtype) then
-			if HF.LimbIsExtremity(limbtype) then
-				HF.SetAfflictionLimb(targetCharacter, "arteriesclamp", limbtype, 100, usingCharacter)
-				HF.GiveSkillScaled(usingCharacter, "medical", 6000)
-			elseif limbtype == LimbType.Head then
-				HF.SetAffliction(targetCharacter, "oxygenlow", 200, usingCharacter)
-				HF.AddAffliction(targetCharacter, "cerebralhypoxia", 15, usingCharacter)
-			end
-
-			HF.RemoveItem(item)
+		if HF.LimbIsExtremity(limbtype) then
+			HF.SetAfflictionLimb(targetCharacter, "arteriesclamp", limbtype, 100, usingCharacter)
+		elseif limbtype == LimbType.Head then
+			HF.SetAffliction(targetCharacter, "oxygenlow", 200, usingCharacter)
+			HF.AddAffliction(targetCharacter, "cerebralhypoxia", 15, usingCharacter)
 		end
+
+		HF.RemoveItem(item)
 	else
 		HF.AddAfflictionLimb(targetCharacter, "blunttrauma", limbtype, 6, usingCharacter)
 	end
@@ -1718,9 +1737,12 @@ NT.ItemMethods.osteosynthesisimplants = function(item, usingCharacter, targetCha
 			end
 
 			HF.SetAfflictionLimb(targetCharacter, "bonegrowth", limbtype, 100, usingCharacter)
-			item.Condition = item.Condition - 25
 
-			if item.Condition <= 0 then HF.RemoveItem(item) end
+			-- Make it possible to increase / decrease the amount of uses of this item
+			local ItemUses = (1 / NTConfig.Get("NTIT_OsteoImplants_uses", 4)) * 100
+			item.Condition = item.Condition - ItemUses
+
+			if item.Condition <= 1 then HF.RemoveItem(item) end
 		else
 			HF.AddAfflictionLimb(targetCharacter, "bleeding", limbtype, 5, usingCharacter)
 			HF.AddAfflictionLimb(targetCharacter, "internaldamage", limbtype, 5, usingCharacter)
@@ -1739,7 +1761,12 @@ NT.ItemMethods.spinalimplant = function(item, usingCharacter, targetCharacter, l
 	then
 		if HF.GetSurgerySkillRequirementMet(usingCharacter, 45) then
 			HF.SetAffliction(targetCharacter, "t_paralysis", 0, usingCharacter)
-			HF.RemoveItem(item)
+
+			-- Make it possible to increase / decrease the amount of uses of this item
+			local ItemUses = (1 / NTConfig.Get("NTIT_SpinalImplants_uses", 1)) * 100
+			item.Condition = item.Condition - ItemUses
+
+			if item.Condition <= 1 then HF.RemoveItem(item) end
 
 			if NTSP ~= nil and NTConfig.Get("NTSP_enableSurgerySkill", true) then
 				HF.GiveSkillScaled(usingCharacter, "surgery", 12000)
@@ -1753,6 +1780,19 @@ NT.ItemMethods.spinalimplant = function(item, usingCharacter, targetCharacter, l
 	end
 end
 
+-- This makes it so we don't have to override the item to add a new affliction.
+-- needlec doesn't go in here, since in prior versions it alone, wouldn't allow drainage.
+NT.DrainageAfflictions = {
+	pneumothorax = { xpgain = 3, case = "retractedskin" },
+	tamponade = {
+		xpgain = 3,
+		case = "retractedskin",
+		-- If Open Close Tamponade is turned on, disable drainage fixing it
+		condition = function()
+			return not NTConfig.Get("NT_OpenCloseTamponade", false)
+		end,
+	},
+}
 -- Drainage
 NT.ItemMethods.drainage = function(item, usingCharacter, targetCharacter, limb)
 	local limbtype = limb.type
@@ -1760,22 +1800,47 @@ NT.ItemMethods.drainage = function(item, usingCharacter, targetCharacter, limb)
 	-- Stasis check
 	if HF.HasAffliction(targetCharacter, "stasis", 0.1) then return end
 
-	if
-		limbtype == LimbType.Torso
-		and HF.HasAfflictionLimb(targetCharacter, "retractedskin", limbtype)
-		and HF.HasAffliction(targetCharacter, "pneumothorax")
-	then
-		HF.SetAffliction(targetCharacter, "pneumothorax", 0, usingCharacter)
-		HF.SetAffliction(targetCharacter, "needlec", 0, usingCharacter)
+	local function removeAfflictionPlusGainSkill(affidentifier, skillgain)
+		if HF.HasAfflictionLimb(targetCharacter, affidentifier, limbtype) then
+			HF.SetAfflictionLimb(targetCharacter, affidentifier, limbtype, 0, usingCharacter)
 
-		if HF.Chance(NTC.GetMultiplier(usingCharacter, "drainageconsumechance")) then HF.RemoveItem(item) end
-
-		if NTSP ~= nil and NTConfig.Get("NTSP_enableSurgerySkill", true) then
-			HF.GiveSkillScaled(usingCharacter, "surgery", 12000)
-		else
-			HF.GiveSkillScaled(usingCharacter, "medical", 6000)
+			HF.GiveSurgerySkill(usingCharacter, skillgain)
 		end
 	end
+
+	local function removeAfflictionNonLimbSpecificPlusGainSkill(affidentifier, skillgain)
+		if HF.HasAffliction(targetCharacter, affidentifier) then
+			HF.SetAffliction(targetCharacter, affidentifier, 0, usingCharacter)
+
+			HF.GiveSurgerySkill(usingCharacter, skillgain)
+		end
+	end
+
+	for key, value in pairs(NT.DrainageAfflictions) do
+		local prefab = AfflictionPrefab.Prefabs[key]
+
+		if
+			prefab ~= nil
+			and (value.case == nil or HF.HasAfflictionLimb(targetCharacter, value.case, limbtype))
+			-- Additional check for config
+			and (value.condition == nil or value.condition(item, usingCharacter, targetCharacter, limb))
+		then
+			if value.func ~= nil then
+				value.func(item, usingCharacter, targetCharacter, limb)
+			else
+				local skillgain = value.xpgain or 0
+
+				if prefab.LimbSpecific then
+					removeAfflictionPlusGainSkill(key, skillgain)
+				elseif prefab.IndicatorLimb == limbtype then
+					removeAfflictionNonLimbSpecificPlusGainSkill(key, skillgain)
+				end
+			end
+		end
+	end
+	HF.SetAffliction(targetCharacter, "needlec", 0, usingCharacter) -- This is seperate, since it shouldnt allow a drainage.
+
+	if HF.Chance(NTC.GetMultiplier(usingCharacter, "drainageconsumechance")) then HF.RemoveItem(item) end
 end
 
 -- Needle
@@ -1787,15 +1852,23 @@ NT.ItemMethods.needle = function(item, usingCharacter, targetCharacter, limb)
 
 	if limbtype == LimbType.Torso and not HF.HasAfflictionLimb(targetCharacter, "retractedskin", limbtype) then
 		if HF.GetSkillRequirementMet(usingCharacter, "medical", 20) then
+			-- If Pneumothorax OR!! Cardiac Tamponade is present, give skill!
 			if
-				HF.HasAffliction(targetCharacter, "pneumothorax")
+				(HF.HasAffliction(targetCharacter, "pneumothorax") or HF.HasAffliction(targetCharacter, "tamponade"))
 				and not HF.HasAffliction(targetCharacter, "needlec", 0.1)
 			then
 				HF.GiveSkillScaled(usingCharacter, "medical", 4000)
 			end
 
 			HF.SetAffliction(targetCharacter, "needlec", 100, usingCharacter)
-			HF.AddAffliction(targetCharacter, "pneumothorax", 1, usingCharacter)
+
+			-- If no Pneumothorax OR!!! Cardiac Tamponade is present, give Pneumothorax.
+			if
+				not HF.HasAffliction(targetCharacter, "pneumothorax")
+				and not HF.HasAffliction(targetCharacter, "tamponade")
+			then
+				HF.AddAffliction(targetCharacter, "pneumothorax", 1, usingCharacter)
+			end
 
 			if HF.Chance(NTC.GetMultiplier(usingCharacter, "needleconsumechance")) then HF.RemoveItem(item) end
 		else
@@ -2491,6 +2564,51 @@ NT.ItemStartsWithMethods.bloodpack = function(item, usingCharacter, targetCharac
 	InfuseBloodpack(item, packtype, usingCharacter, targetCharacter, limb)
 end
 
+-- Dynamic Items
+-- Endovascular Balloon
+NT.ItemMethods.endovascballoon = function(item, usingCharacter, targetCharacter, limb)
+	local limbtype = limb.type
+
+	-- don't work on stasis
+	if HF.HasAffliction(targetCharacter, "stasis", 0.1) then return end
+
+	if
+		limbtype == LimbType.Torso
+		and HF.HasAfflictionLimb(targetCharacter, "surgeryincision", limbtype, 1)
+		and HF.HasAffliction(targetCharacter, "t_arterialcut", 1)
+	then
+		HF.AddAffliction(targetCharacter, "balloonedaorta", 100, usingCharacter)
+		HF.SetAffliction(targetCharacter, "internalbleeding", 0, usingCharacter)
+
+		if NTSP ~= nil and NTConfig.Get("NTSP_enableSurgerySkill", true) then
+			HF.GiveSkillScaled(usingCharacter, "surgery", 10000)
+		else
+			HF.GiveSkillScaled(usingCharacter, "medical", 5000)
+		end
+
+		if HF.Chance(NTC.GetMultiplier(usingCharacter, "balloonconsumechance")) then HF.RemoveItem(item) end
+	end
+end
+
+-- Medical Stent
+NT.ItemMethods.medstent = function(item, usingCharacter, targetCharacter, limb)
+	local limbtype = limb.type
+
+	-- don't work on stasis
+	if HF.HasAffliction(targetCharacter, "stasis", 0.1) then return end
+
+	if limbtype == LimbType.Torso and HF.HasAffliction(targetCharacter, "balloonedaorta", 1) then
+		HF.SetAffliction(targetCharacter, "balloonedaorta", 0, usingCharacter)
+		HF.SetAffliction(targetCharacter, "t_arterialcut", 0, usingCharacter)
+
+		if NTSP ~= nil and NTConfig.Get("NTSP_enableSurgerySkill", true) then
+			HF.GiveSkillScaled(usingCharacter, "surgery", 20000)
+		else
+			HF.GiveSkillScaled(usingCharacter, "medical", 10000)
+		end
+	end
+end
+
 -- ============================ HOOKS ===========================
 -- Make it so that the person dragging the wearer of a body bag can drag fast
 -- Fast dragging may start a little late
@@ -2569,40 +2687,48 @@ Hook.Add("meleeWeapon.handleImpact", "NT.fracturedOnMelee", function(meleeWeapon
 	if item == nil then return end
 
 	Timer.Wait(function()
+		local adrenaline = HF.HasAffliction(itemUser, "afadrenaline", 1)
 		-- Right Arm Fracture
-		if
-			HF.HasAffliction(itemUser, "ra_fracture", 1)
-			and itemUser.Inventory.IsInLimbSlot(item, 2)
-			and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.RightArm, 0.1)
-		then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "ra_fracture", 100)
-			HF.SetAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 70)
-
-		-- Dislocation
-		elseif HF.HasAffliction(itemUser, "dislocation3", 1) and itemUser.Inventory.IsInLimbSlot(item, 2) then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "dislocation3", 100)
+		if itemUser.Inventory.IsInLimbSlot(item, 2) then
+			if
+				HF.HasAffliction(itemUser, "ra_fracture", 1)
+				and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.RightArm, 0.1)
+			then
+				if adrenaline then
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 15)
+				else
+					itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+					item.Drop(itemUser, true)
+					HF.SetAffliction(itemUser, "ra_fracture", 100)
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 40)
+				end
+			-- Dislocation
+			elseif HF.HasAffliction(itemUser, "dislocation3", 1) and not adrenaline then
+				itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+				item.Drop(itemUser, true)
+				HF.SetAffliction(itemUser, "dislocation3", 100)
+			end
 		end
-
 		-- Left Arm Fracture
-		if
-			HF.HasAffliction(itemUser, "la_fracture", 1)
-			and itemUser.Inventory.IsInLimbSlot(item, 4)
-			and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.LeftArm, 0.1)
-		then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "la_fracture", 100)
-			HF.SetAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 70)
-
-		-- Dislocation
-		elseif HF.HasAffliction(itemUser, "dislocation4", 1) and itemUser.Inventory.IsInLimbSlot(item, 4) then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "dislocation4", 100)
+		if itemUser.Inventory.IsInLimbSlot(item, 4) then
+			if
+				HF.HasAffliction(itemUser, "la_fracture", 1)
+				and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.LeftArm, 0.1)
+			then
+				if adrenaline then
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 15)
+				else
+					itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+					item.Drop(itemUser, true)
+					HF.SetAffliction(itemUser, "la_fracture", 100)
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 40)
+				end
+			-- Dislocation
+			elseif HF.HasAffliction(itemUser, "dislocation4", 1) and not adrenaline then
+				itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+				item.Drop(itemUser, true)
+				HF.SetAffliction(itemUser, "dislocation4", 100)
+			end
 		end
 	end, 1)
 end)
@@ -2610,41 +2736,49 @@ end)
 Hook.Add("item.use", "NT.fracturedOnShoot", function(item, itemUser, targetLimb)
 	Timer.Wait(function()
 		if item == nil or item.GetComponentString("RangedWeapon") == nil or itemUser == nil then return end
+		local adrenaline = HF.HasAffliction(itemUser, "afadrenaline", 1)
 
 		-- Right Arm Fracture
-		if
-			HF.HasAffliction(itemUser, "ra_fracture", 1)
-			and itemUser.Inventory.IsInLimbSlot(item, 2)
-			and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.RightArm, 0.1)
-		then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "ra_fracture", 100)
-			HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 70)
-
-		-- Dislocation
-		elseif HF.HasAffliction(itemUser, "dislocation3", 1) and itemUser.Inventory.IsInLimbSlot(item, 2) then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "dislocation3", 100)
+		if itemUser.Inventory.IsInLimbSlot(item, 2) then
+			if
+				HF.HasAffliction(itemUser, "ra_fracture", 1)
+				and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.RightArm, 0.1)
+			then
+				if adrenaline then
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 15)
+				else
+					itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+					item.Drop(itemUser, true)
+					HF.SetAffliction(itemUser, "ra_fracture", 100)
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.RightArm, 40)
+				end
+			-- Dislocation
+			elseif HF.HasAffliction(itemUser, "dislocation3", 1) and not adrenaline then
+				itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+				item.Drop(itemUser, true)
+				HF.SetAffliction(itemUser, "dislocation3", 100)
+			end
 		end
-
 		-- Left Arm Fracture
-		if
-			HF.HasAffliction(itemUser, "la_fracture", 1)
-			and itemUser.Inventory.IsInLimbSlot(item, 4)
-			and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.LeftArm, 0.1)
-		then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "la_fracture", 100)
-			HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 70)
-
-		-- Dislocation
-		elseif HF.HasAffliction(itemUser, "dislocation4", 1) and itemUser.Inventory.IsInLimbSlot(item, 4) then
-			itemUser.Inventory.ForceRemoveFromSlot(item, 0)
-			item.Drop(itemUser, true)
-			HF.SetAffliction(itemUser, "dislocation4", 100)
+		if itemUser.Inventory.IsInLimbSlot(item, 4) then
+			if
+				HF.HasAffliction(itemUser, "la_fracture", 1)
+				and not HF.HasAfflictionLimb(itemUser, "gypsumcast", LimbType.LeftArm, 0.1)
+			then
+				if adrenaline then
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 15)
+				else
+					itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+					item.Drop(itemUser, true)
+					HF.SetAffliction(itemUser, "la_fracture", 100)
+					HF.AddAfflictionLimb(itemUser, "bleeding", LimbType.LeftArm, 40)
+				end
+			-- Dislocation
+			elseif HF.HasAffliction(itemUser, "dislocation4", 1) and not adrenaline then
+				itemUser.Inventory.ForceRemoveFromSlot(item, 0)
+				item.Drop(itemUser, true)
+				HF.SetAffliction(itemUser, "dislocation4", 100)
+			end
 		end
 	end, 1)
 end)

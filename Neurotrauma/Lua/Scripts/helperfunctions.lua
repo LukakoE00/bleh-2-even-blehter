@@ -1185,3 +1185,34 @@ function HF.GetVelocity(character)
 
 	return character.AnimController.MainLimb.body.LinearVelocity
 end
+
+function HF.DynamicUnavailableItems()
+	local blockedItems = {}
+
+	-- Hardmode Aortic Rupture; enable/disable stent + balloon
+	if NTConfig.Get("NT_HardmodeAorticRupture", false) == false then
+		blockedItems["medstent"] = true
+		blockedItems["endovascballoon"] = true
+	end
+
+	-- Sodium Nitroprusside
+	if NTConfig.Get("NT_DoNitroprusside", false) == false then blockedItems["pressuremeds"] = true end
+
+	-- Antiseptic (sprayer)
+	if NTConfig.Get("NT_DoAntisepticSprayer", false) == false then
+		blockedItems["antisepticspray"] = true
+		blockedItems["antiseptic"] = true
+	end
+
+	-- Organ scalpels
+	if NTConfig.Get("NT_DoOrganScalpels", false) == false then
+		blockedItems["organscalpel_liver"] = true
+		blockedItems["organscalpel_kidneys"] = true
+		blockedItems["organscalpel_heart"] = true
+		blockedItems["organscalpel_lungs"] = true
+		blockedItems["organscalpel_brain"] = true
+		blockedItems["surgerytoolboxsetscalpel"] = true
+	end
+
+	return blockedItems
+end

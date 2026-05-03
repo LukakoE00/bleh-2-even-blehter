@@ -6,7 +6,7 @@ NT.UpdateInterval = 120
 NT.Deltatime = NT.UpdateInterval / 60 -- Time in seconds that transpires between updates
 
 Hook.Add("think", "NT.update", function()
-	if HF.GameIsPaused() then return end
+	if HF.GameIsPaused() or not Game.RoundStarted then return end
 
 	NT.UpdateCooldown = NT.UpdateCooldown - 1
 	if NT.UpdateCooldown <= 0 then
@@ -52,10 +52,12 @@ function NT.Update()
 
 	-- we spread the monsters out over the duration of an update so that the load isnt done all at once
 	for key, value in pairs(updateMonsters) do
-		-- make sure theyre still alive
+		-- make sure theyre still alive and not human
 		if value ~= nil and not value.Removed and not value.IsDead then
 			Timer.Wait(function()
-				if value ~= nil and not value.Removed and not value.IsDead then NT.UpdateMonster(value) end
+				if value ~= nil and not value.Removed and not value.IsDead and not value.IsHuman then
+					NT.UpdateMonster(value)
+				end
 			end, ((key + 1) / amountMonsters) * NT.Deltatime * 1000)
 		end
 	end
@@ -72,13 +74,14 @@ local function limbLockedInitial(c, limbtype, key)
 				limbtype,
 				"dirtybandage",
 				0
-			) <= 0 and NT.LimbIsDislocated(
+			) <= 0 and HF.GetAfflictionStrength(c.character, "afadrenaline", 0) <= 0 and NT.LimbIsDislocated(
 				c.character,
 				limbtype,
 				limbtype == LimbType.LeftArm or limbtype == LimbType.RightArm
 			))
 			or (
 				HF.GetAfflictionStrengthLimb(c.character, limbtype, "gypsumcast", 0) <= 0
+				and HF.GetAfflictionStrength(c.character, "afadrenaline", 0) <= 0
 				and NT.LimbIsBroken(
 					c.character,
 					limbtype,
@@ -199,20 +202,26 @@ NT.Afflictions = {
 	ll_fracture = {
 		update = function(c, i)
 			if c.afflictions[i].strength > 0 then
-				c.afflictions[i].strength = c.afflictions[i].strength
-					+ 2
-						* HF.BoolToNum(not HF.HasAfflictionLimb(c.character, "gypsumcast", LimbType.LeftLeg))
-						* NT.Deltatime
+				local hascast = HF.HasAfflictionLimb(c.character, "gypsumcast", LimbType.LeftLeg)
+
+				c.afflictions[i].strength = c.afflictions[i].strength + 2 * HF.BoolToNum(not hascast) * NT.Deltatime
+
+				if not hascast and HF.HasAffliction(c.character, "afadrenaline", 1) and not c.character.IsRagdolled then
+					HF.AddAfflictionLimb(c.character, "bleeding", LimbType.LeftLeg, 15)
+				end
 			end
 		end,
 	},
 	rl_fracture = {
 		update = function(c, i)
 			if c.afflictions[i].strength > 0 then
-				c.afflictions[i].strength = c.afflictions[i].strength
-					+ 2
-						* HF.BoolToNum(not HF.HasAfflictionLimb(c.character, "gypsumcast", LimbType.RightLeg))
-						* NT.Deltatime
+				local hascast = HF.HasAfflictionLimb(c.character, "gypsumcast", LimbType.RightLeg)
+
+				c.afflictions[i].strength = c.afflictions[i].strength + 2 * HF.BoolToNum(not hascast) * NT.Deltatime
+
+				if not hascast and HF.HasAffliction(c.character, "afadrenaline", 1) and not c.character.IsRagdolled then
+					HF.AddAfflictionLimb(c.character, "bleeding", LimbType.RightLeg, 15)
+				end
 			end
 		end,
 	},
@@ -337,7 +346,17 @@ NT.Afflictions = {
 	tamponade = {
 		update = function(c, i)
 			if c.afflictions[i].strength > 0 then
-				c.afflictions[i].strength = c.afflictions[i].strength + NT.Deltatime * 0.5
+				c.afflictions[i].strength = HF.Clamp(
+					c.afflictions[i].strength
+						+ NT.Deltatime
+							* (
+								0.5 -- gain 0.5/s
+								- HF.BoolToNum(c.afflictions[i].strength > 5)
+									* HF.Clamp(c.afflictions.needlec.strength, 0, 1)
+							), -- ...except if needled and >5%, then lose 0.5/s
+					0,
+					100
+				)
 			end
 
 			if c.afflictions.heartremoved.strength > 0 then c.afflictions[i].strength = 0 end
@@ -434,7 +453,7 @@ NT.Afflictions = {
 					* NTC.GetMultiplier(c.character, "neurotraumagain") -- NTC multiplier
 					* NTConfig.Get("NT_neurotraumaGain", 1) -- Config multiplier
 					* (1 - HF.Clamp(c.afflictions.afmannitol.strength, 0, 0.5)) -- half if mannitol
-			elseif gain < -0.8 then
+			elseif gain < -0.08 then
 				gain = gain * 2.5
 			end
 
@@ -770,7 +789,7 @@ NT.Afflictions = {
 				and c.afflictions.alkalosis.strength < 20
 				and c.afflictions.heartdamage.strength < 30
 				and c.afflictions.lungdamage.strength < 40
-				and c.stats.availableoxygen == 100
+				and c.stats.availableoxygen > 60
 			then
 				c.afflictions[i].strength = c.afflictions[i].strength - NT.Deltatime / 2
 			else
@@ -1448,8 +1467,8 @@ NT.LimbAfflictions = {
 	-- damage
 	bleeding = {
 		update = function(c, limbaff, i)
-			if limbaff[i].strength > 0 and math.abs(c.stats.clottingrate - 1) > 0.05 then
-				limbaff[i].strength = limbaff[i].strength - (c.stats.clottingrate - 1) * 0.1 * NT.Deltatime
+			if limbaff[i].strength > 0 then
+				limbaff[i].strength = limbaff[i].strength - c.stats.clottingrate * 0.1 * NT.Deltatime
 			end
 		end,
 	},
@@ -1803,8 +1822,8 @@ NT.CharStats = {
 			local res = HF.Clamp(c.character.Oxygen, 0, 100)
 			-- heart isnt pumping blood? no new oxygen is getting into the bloodstream, no matter how oxygen rich the air in the lungs
 			res = res * (1 - c.afflictions.fibrillation.strength / 100)
-			-- and uuuh, maybe also dont let people without lungs use the oxygen where their lungs should be
-			if c.afflictions.cardiacarrest.strength > 1 or c.afflictions.lungremoved.strength > 0.1 then res = 0 end
+			-- and uuuh, maybe also dont let people without lungs or broken lungs use the oxygen where their lungs should be
+			if c.afflictions.cardiacarrest.strength > 1 or c.afflictions.lungdamage.strength == 100 or c.afflictions.lungremoved.strength > 0.1 then res = 0 end
 			return res
 		end,
 	},
@@ -1872,8 +1891,10 @@ NT.CharStats = {
 				c.stats.lockrightleg = c.stats.lockrightarm
 			end
 			-- leg and wheelchair slowdown
-			if c.stats.lockleftleg or c.stats.lockrightleg or res then
-				c.stats.speedmultiplier = c.stats.speedmultiplier * 0.5
+			if c.stats.lockleftleg or c.stats.lockrightleg then
+				if c.afflictions.afadrenaline.strength < 0.1 or res then
+					c.stats.speedmultiplier = c.stats.speedmultiplier * 0.5
+				end
 			end
 			local isProne = c.stats.lockleftleg and c.stats.lockrightleg
 			-- okay climbing ability
